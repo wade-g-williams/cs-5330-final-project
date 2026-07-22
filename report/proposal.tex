@@ -1,0 +1,160 @@
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[
+  12pt,
+]{fphw}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{mathpazo}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{subcaption}
+\usepackage{caption}
+\usepackage{url}
+\usepackage[colorlinks=true, urlcolor=blue]{hyperref}
+
+%----------------------------------------------------------------------------------------
+%	ASSIGNMENT INFORMATION
+%----------------------------------------------------------------------------------------
+
+\title{Final Project Proposal: RGB-D Object Detection for Collision Avoidance}
+\author{Thomas Kulch, Darshan Kedari, Wade Williams}
+\date{July 21, 2026}
+\institute{Northeastern University // Khoury College of Computer Science}
+\class{Computer Vision (CS 5330)}
+\professor{Bruce Maxwell}
+
+% Compact title block: smaller title font, tighter spacing, one-line course/date
+\renewcommand{\StudentLang}{Students}
+\makeatletter
+\renewcommand{\maketitle}{%
+    \thispagestyle{plain}
+    \begin{center}
+        \ifx\instituteloc\undefined{}\else{\scshape \instituteloc} \\[4pt] \fi
+        \hrule
+        \vspace{6pt}
+        {\Large \bfseries \@title} \\[3pt]
+        \StudentLang: {\itshape \@author}
+        \vspace{4pt}
+        \hrule
+        \vspace{6pt}
+        \ifx\classlocal\undefined{}\else\CourseLang: {\itshape \classlocal{} \ifx\professorloc\undefined{}\else{-- }\fi  }\fi
+        \ifx\professorloc\undefined{}\else{\ProfessorLang: {\itshape\professorloc\/}}~\fi
+        -- \DateLang: {\itshape\@date}
+        \vspace{8pt}
+    \end{center}
+}
+\makeatother
+
+%----------------------------------------------------------------------------------------
+
+\begin{document}
+
+\maketitle
+
+%----------------------------------------------------------------------------------------
+
+In our project, we will build a perception pipeline that converts an RGB-D video stream into a top-down
+occupancy map with real-world distances and scale for collision avoidance. For each frame, the system will
+detect and classify objects in the RGB image, place every obstacle in real-world 3D coordinates using
+aligned depth, remove the ground plane so the floor is not treated as an obstacle, and cluster the
+remaining 3D points so that obstacles the detector was never trained on are still detected. The output of
+this pipeline will be a Bird's Eye View (BEV) occupancy map labeling each obstacle's class and 3D
+position. We plan to evaluate the system on at least three datasets --- the KITTI 3D object detection
+benchmark~\cite{kitti} for outdoor environments, SUN RGB-D~\cite{sunrgbd} on indoor environments, and on
+our own recordings that we will collect using an RGB-D camera. SUN RGB-D and our collected dataset will
+come with real aligned depth measured by RGB-D sensors, while KITTI only offers RGB images with LiDAR
+measurements as the ground truth. Therefore, to obtain depth data for the KITTI dataset, we will use Depth
+Anything V2~\cite{depthanything2} to predict depth, and for the datasets where we already have depth data,
+we will run variants using both Depth Anything V2 predictions and the depth data from the RGB-D sensor
+data. This one experiment will let us measure to what extent depth estimates from Depth Anything V2 can
+substitute real sensor data.
+
+The pipeline will consist of six stages. First, a YOLO11 detector~\cite{yolo}, pretrained on the COCO
+dataset~\cite{coco}, will produce 2D boxes and classes, with COCO's classes mapped to each dataset's
+labels. It will then back-project the depth map through the camera intrinsics into a 3D point cloud,
+serving as a LiDAR-like representation~\cite{pseudolidar}. Next, the pipeline will use
+RANSAC~\cite{ransac} to remove the ground-plane as an object and a clustering algorithm to group remaining
+points into objects ourselves if needed. We will then fuse the YOLO object detections with the 3D clusters
+by projecting the clusters onto the image, so that each object gets a class label (or ``unknown''), a 3D
+centroid, and a bounding box. Lastly, we will render obstacles on a BEV occupancy map grid with distance
+rings / shapes.
+
+We will evaluate the success of our pipeline in various ways depending on the dataset. On KITTI, we will
+compute the the 3D centroid localization error against the dataset's 3D box annotations to measure how
+accurately we place objects and 3D average precision from the KITTI evaluation code to measure how
+reliably we find them. We'll compare both metrics to published pseudo-LiDAR results~\cite{pseudolidar}. On
+SUN RGB-D, we will evaluate the same two metrics for the dataset's sensor depth -- mean average precision
+under the community-standard 10-class protocol~\cite{votenet} and the centroid error. The COCO dataset
+only covers part of this 10-class list, so we will evaluate the classes that are scoreable, with the rest
+appearing as unknown obstacles. We may also interchange the nuScenes dataset~\cite{nuscenes} for the KITTI
+dataset as outdoor benchmarks depending on our preliminary results.
+
+Beyond this core system, we have brainstormed possible extensions we could pursue depending on our initial
+progress and results by the checkin date. These extensions include recording our own data using an RGB-D
+camera with a UI that shows detected objects and collision alerts and recording a live demo, utilizing our
+pipeline to enable collision steering via object detection in the Habitat-Sim simulation
+environment~\cite{habitat} where a mobile robot navigates photorealistic indoor environments using the BEV
+map, finetuning the object detector on target domains, finetuning the metric depth head on KITTI's ground
+truth LiDAR depth measurements, and training a frustum-based 3D regression head~\cite{frustum}, with the
+results reported as an ablation against the zero-shot baseline. Further, we will consider implementing our
+pipeline on a real robot and experimenting with 3D scene reconstruction methods, but this is likely out of
+scope. We are very excited about this project and look forward to hearing feedback and discussing
+preliminary results.
+
+%----------------------------------------------------------------------------------------
+
+\begin{thebibliography}{11}
+
+\bibitem{kitti}
+A.~Geiger, P.~Lenz, and R.~Urtasun, ``Are we ready for autonomous driving? The KITTI vision benchmark
+suite,'' in \emph{CVPR}, 2012.
+
+\bibitem{sunrgbd}
+S.~Song, S.~Lichtenberg, and J.~Xiao, ``SUN RGB-D: A RGB-D scene understanding benchmark suite,'' in
+\emph{CVPR}, 2015.
+
+\bibitem{depthanything2}
+L.~Yang, B.~Kang, Z.~Huang, Z.~Zhao, X.~Xu, J.~Feng, and H.~Zhao, ``Depth Anything V2,'' in
+\emph{NeurIPS}, 2024.
+
+\bibitem{yolo}
+J.~Redmon, S.~Divvala, R.~Girshick, and A.~Farhadi, ``You only look once: Unified, real-time object
+detection,'' in \emph{CVPR}, 2016.
+
+\bibitem{coco}
+T.-Y.~Lin, M.~Maire, S.~Belongie, J.~Hays, P.~Perona, D.~Ramanan, P.~Doll\'ar, and C.~L.~Zitnick,
+``Microsoft COCO: Common objects in context,'' in \emph{ECCV}, 2014.
+
+\bibitem{pseudolidar}
+Y.~Wang, W.-L.~Chao, D.~Garg, B.~Hariharan, M.~Campbell, and K.~Q.~Weinberger, ``Pseudo-LiDAR from visual
+depth estimation: Bridging the gap in 3D object detection for autonomous driving,'' in \emph{CVPR}, 2019.
+
+\bibitem{ransac}
+M.~A.~Fischler and R.~C.~Bolles, ``Random sample consensus: A paradigm for model fitting with applications
+to image analysis and automated cartography,'' \emph{Communications of the ACM}, vol.~24, no.~6, 1981.
+
+\bibitem{votenet}
+C.~R.~Qi, O.~Litany, K.~He, and L.~J.~Guibas, ``Deep Hough voting for 3D object detection in point
+clouds,'' in \emph{ICCV}, 2019.
+
+\bibitem{nuscenes}
+H.~Caesar, V.~Bankiti, A.~H.~Lang, S.~Vora, V.~E.~Liong, Q.~Xu, A.~Krishnan, Y.~Pan, G.~Baldan, and
+O.~Beijbom, ``nuScenes: A multimodal dataset for autonomous driving,'' in \emph{CVPR}, 2020.
+
+\bibitem{habitat}
+M.~Savva, A.~Kadian, O.~Maksymets, Y.~Zhao, E.~Wijmans, B.~Jain, J.~Straub, J.~Liu, V.~Koltun,
+J.~Malik, D.~Parikh, and D.~Batra, ``Habitat: A platform for embodied AI research,'' in \emph{ICCV}, 2019.
+
+\bibitem{frustum}
+C.~R.~Qi, W.~Liu, C.~Wu, H.~Su, and L.~J.~Guibas, ``Frustum PointNets for 3D object detection from RGB-D
+data,'' in \emph{CVPR}, 2018.
+
+\end{thebibliography}
+
+\end{document}
