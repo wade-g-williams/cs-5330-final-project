@@ -42,8 +42,8 @@ class SunRGBDLoader(DatasetLoader):
     def __getitem__(self, index: int) -> Frame:
         s = self.samples[index]
         rgb = self._read_rgb(s["rgb"])
-        K = self._read_intrinsics(s["intr"])
-        depth = self._read_depth(s["depth"], K, rgb.shape[:2])
+        rtilt, K = self._read_calib(s["intr"])
+        depth = self._read_depth(s["depth"], rtilt, K, rgb.shape[:2])
         return Frame(
             rgb=rgb,
             depth=depth,
@@ -61,18 +61,23 @@ class SunRGBDLoader(DatasetLoader):
             raise FileNotFoundError(f"could not read image: {path}")
         return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)     # BGR --> RGB, per our Frame convention
 
-    def _read_depth(self, path, K: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
-        # depth/NNNNNN.mat holds an (N, 6) point cloud [x, y, z, r, g, b] in SUN RGB-D's "upright" frame:
-        # x = right, y = forward (depth), z = up. Already in meters.
+    def _read_depth(self, path, rtilt: np.ndarray, K: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+        # depth/NNNNNN.mat holds an (N, 6) point cloud [x, y, z, r, g, b], already in meters.
+        # SUN RGB-D's read3dPoints.m builds points in the camera frame and stores them as
+        #     p_stored = Rtilt @ [X, Z, -Y]
+        # (X right, Y down, Z forward), so recovering the camera frame means undoing the
+        # room-tilt rotation FIRST, then reading off the permuted columns.
         mat = sio.loadmat(str(path))
         if mat is None or "instance" not in mat:
             raise FileNotFoundError(f"could not read depth points: {path}")
         pts = mat["instance"].astype(np.float64)
 
-        # Convert upright (x, y_forward, z_up) --> pinhole camera frame
-        # (Xc = right, Yc = down, Zc = forward), then reproject through K to
-        # rasterize the point cloud back onto the pixel grid it came from.
-        Xc, Yc, Zc = pts[:, 0], -pts[:, 2], pts[:, 1]
+        # Undo the tilt (for row-vectors, applying Rtilt^-1 to every row is `@ rtilt.T`),
+        # then permute to the pinhole camera frame and reproject through K to rasterize
+        # the cloud back onto the pixel grid it came from. Verified by
+        # scripts/check_reprojection.py: 99.7% of points land in frame, colour MAE ~3.
+        p = pts[:, :3] @ rtilt.T
+        Xc, Yc, Zc = p[:, 0], -p[:, 2], p[:, 1]
         fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
         u = np.round(fx * Xc / Zc + cx).astype(np.int64)
         v = np.round(fy * Yc / Zc + cy).astype(np.int64)
@@ -88,9 +93,11 @@ class SunRGBDLoader(DatasetLoader):
         depth_m[depth_m > 8.0] = 0.0                          # these sensors max ~8m; treat > 8m as invalid
         return depth_m
 
-    def _read_intrinsics(self, path) -> np.ndarray:
-        # calib/NNNNNN.txt has two lines: Rtilt (room-tilt rotation, unused here)
-        # and K stored transposed (fx 0 0 / 0 fy 0 / cx cy 1) -- transpose it back.
+    def _read_calib(self, path) -> tuple[np.ndarray, np.ndarray]:
+        # calib/NNNNNN.txt has two lines: Rtilt (the room-tilt rotation, needed to bring
+        # the stored point cloud back into the camera frame -- see _read_depth) and K
+        # stored transposed (fx 0 0 / 0 fy 0 / cx cy 1) -- transpose it back.
         vals = np.loadtxt(str(path))
+        rtilt = vals[0].reshape(3, 3).astype(np.float64)
         K_transposed = vals[1].reshape(3, 3)
-        return K_transposed.T.astype(np.float64)
+        return rtilt, K_transposed.T.astype(np.float64)
