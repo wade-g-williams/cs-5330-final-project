@@ -1,2 +1,10 @@
 docs/proposal.md
 archive/
+
+.venv/
+data/
+models/
+out/
+__pycache__/
+*.onnx
+*.pt

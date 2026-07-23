@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "collision-avoidance"
+version = "0.1.0"
+description = "RGB-D collision-avoidance pipeline (CS 5330 final project): RGB-D video → Bird's-Eye-View obstacle map"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { text = "MIT" }
+authors = [
+    { name = "Thomas Kulch" },
+    { name = "Darshan Kedari" },
+    { name = "Wade Williams" },
+]
+
+# Core (Stage 0) dependencies — deliberately torch-free so `uv pip install -e .`
+# stays fast and CPU-only. Detection (ultralytics, onnxruntime) and depth (torch,
+# torchvision, Depth Anything V2) are installed separately — see docs/implementation.md
+# §5 — because CUDA PyTorch must be installed BEFORE ultralytics to avoid pulling the
+# CPU-only torch wheel.
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "matplotlib",
+    "huggingface-hub",
+    "scipy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+# src-layout: the importable package lives under src/, so tell hatchling where it is.
+[tool.hatch.build.targets.wheel]
+packages = ["src/collision_avoidance"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
