@@ -1,7 +1,8 @@
 """
 Authors: Wade Williams, Thomas Kulch, Darshan Kedari
 
-Purpose: 
+Purpose: The Frame contract -- one RGB-D frame in the single standard form every dataset
+loader produces and every pipeline stage consumes. Units and conventions are fixed here.
 """
 
 from dataclasses import dataclass, field
@@ -37,5 +38,3 @@ class Frame:
     def cx(self) -> float: return float(self.K[0, 2])
     @property
     def cy(self) -> float: return float(self.K[1, 2])
-
-

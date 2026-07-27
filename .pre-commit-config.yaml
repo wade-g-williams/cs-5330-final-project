@@ -1,0 +1,31 @@
+# Shared hooks for the three of us. Install once after cloning:
+#   pre-commit install
+#
+# Deliberately lint-only: ruff-check catches real errors (unused imports, undefined names,
+# bare excepts) while leaving formatting to human judgement, so hand-aligned shape/unit
+# annotations survive. If we ever add ruff-format, bump the rev in both places at once --
+# version skew between the hook pin and the local tool makes them disagree.
+
+# report/*.cls are vendored upstream (IEEEtran, fphw). Never reformat them: it makes the diff
+# against upstream unverifiable, and trailing space is load-bearing in some LaTeX macros.
+exclude: '^report/.*\.cls$'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        # Two trailing spaces are a HARD LINE BREAK in Markdown. Stripping them silently
+        # reflows our docs into run-on paragraphs, so exempt .md.
+        args: ['--markdown-linebreak-ext=md']
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=1000']      # datasets and checkpoints belong in data/ and models/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.6
+    hooks:
+      - id: ruff-check
+        args: ['--fix']

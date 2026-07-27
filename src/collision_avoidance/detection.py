@@ -1,13 +1,13 @@
 """
 Authors: Wade Williams, Thomas Kulch, Darshan Kedari
 
-Purpose: 
+Purpose: COCO-pretrained YOLO11 detection, with COCO class names remapped to each dataset's
+benchmark labels. Produces the Detection records that fusion consumes.
 """
 
 from dataclasses import dataclass
 
 import cv2
-import numpy as np
 from ultralytics import YOLO
 
 from .frame import Frame
@@ -25,7 +25,10 @@ class Detection:
 
 
 class Detector:
-    def __init__(self, model_path: str = "yolo11n.pt", conf: float = 0.25, class_map: dict | None = None):
+    # model_path is required and should be absolute (use config.DETECTOR_MODEL). A bare
+    # relative name makes Ultralytics download the weights into the current working
+    # directory instead of models/, so there is deliberately no default here.
+    def __init__(self, model_path: str, conf: float = 0.25, class_map: dict | None = None):
         self.model = YOLO(model_path)
         self.conf = conf
         self.class_map = class_map or {}

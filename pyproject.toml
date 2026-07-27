@@ -35,5 +35,15 @@ dev = ["pytest"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/collision_avoidance"]
 
+[tool.ruff]
+# The code reads at ~100 columns; shape/unit annotations sit in a trailing comment column.
+line-length = 100
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Tests touching the 35 GB SUN RGB-D download or a YOLO checkpoint are tagged `needs_data`
+# and skip cleanly when those are absent (see tests/conftest.py). For a fast, dependency-free
+# run of just the pure-logic tests:  pytest -m "not needs_data"
+markers = [
+    "needs_data: requires the SUN RGB-D download and/or a YOLO checkpoint on disk",
+]

@@ -1,7 +1,8 @@
 """
 Authors: Wade Williams, Thomas Kulch, Darshan Kedari
 
-Purpose: 
+Purpose: The interface every dataset loader implements -- a read-only sequence of Frames.
+Subclass this to add a dataset, then register it in datasets/__init__.py.
 """
 
 from abc import ABC, abstractmethod
@@ -14,7 +15,7 @@ class DatasetLoader(ABC):
     """
     Interface that every dataset loader uses.
 
-    Behaves like a read-only sequence of Frames: len(loader) frames, indexable 
+    Behaves like a read-only sequence of Frames: len(loader) frames, indexable
     with loader[i], and iterable with 'for frame in loader'.
     """
 

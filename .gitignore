@@ -1,11 +1,19 @@
-docs/stage0.md
-docs/stage1.md
+# Stage write-ups — local build notes, deliberately not published.
+# Glob so stage3.md … stage6.md are covered as they appear.
+docs/stage*.md
 archive/
 
+# Environments and tool caches
 .venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Large artifacts: datasets, model weights, generated output.
+# Checkpoints belong in models/ — config.MODELS_DIR points there so Ultralytics
+# never downloads them into the repo root.
 data/
 models/
 out/
-__pycache__/
 *.onnx
 *.pt

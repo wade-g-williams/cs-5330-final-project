@@ -88,7 +88,7 @@ checkpoints, class mappings, and per-stage sub-steps). Dataset logistics and got
 
 | Stage | Name | Input | Output | Core method | Module |
 |-------|------|-------|--------|-------------|--------|
-| **0** | Data foundation | dataset files | `Frame` = RGB + metric depth + `K` | dataset loaders + depth handling | `datasets/`, `frame.py`, `depth.py` |
+| **0** | Data foundation | dataset files | `Frame` = RGB + metric depth + `K` | dataset loaders + depth handling | `datasets/`, `frame.py`, `depth.py`, `types.py` |
 | **1** | 2D detection | RGB image | 2D boxes + class labels | YOLO11 (COCO-pretrained, ONNX) | `detection.py` |
 | **2** | Back-projection | depth + `K` | metric 3D point cloud | pinhole model (pseudo-LiDAR) | `geometry.py` |
 | **3** | Ground removal | point cloud | cloud minus floor/road | **self-implemented** RANSAC plane fit | `ground.py` |
@@ -143,13 +143,13 @@ cs-5330-final-project/
 │   │                           #     distance (1.5 m), COCO→dataset class maps
 │   ├── frame.py                #   Frame dataclass — the contract every loader returns and
 │   │                           #     every stage consumes (rgb, depth in meters, K, meta)
+│   ├── types.py                #   Cluster / Obstacle dataclasses for later stages
 │   ├── datasets/               #   Stage 0 — one loader per dataset, all returning Frame
 │   │   ├── __init__.py
 │   │   ├── base.py             #     DatasetLoader abstract base class (the interface)
 │   │   ├── sunrgbd.py          #     SUN RGB-D loader (built first — real sensor depth)
-│   │   └── kitti.py            #     KITTI loader (later — pairs with DA-V2 depth)
-│   ├── depth.py                #   depth sources: sensor passthrough (now) + Depth Anything V2
-│   │                           #     wrapper for KITTI's estimated-depth branch (later)
+│   │   └── kitti.py            #     KITTI loader — depth comes from DA-V2, not a sensor
+│   ├── depth.py                #   Depth Anything V2 metric depth (indoor/outdoor checkpoints)
 │   ├── detection.py            #   Stage 1 — YOLO11 wrapper + COCO→dataset class remap
 │   ├── geometry.py             #   Stage 2 — pinhole back-projection, intrinsics math
 │   ├── ground.py               #   Stage 3 — RANSAC plane fit + inlier (ground) removal
@@ -160,14 +160,18 @@ cs-5330-final-project/
 │   └── viz.py                  #   shared drawing helpers (boxes, depth colormap, BEV overlay)
 │
 ├── scripts/                    # runnable command-line entry points (thin wrappers on the package)
-│   ├── download_sunrgbd.py     #   fetch the SUN RGB-D mirror into data/
-│   ├── smoke_test_stage0.py    #   Stage 0 verification: load a frame, visualize, print stats
+│   ├── download_datasets.py    #   fetch + extract SUN RGB-D and KITTI into data/
+│   ├── view_frame.py           #   eyeball one frame: RGB + depth colormap + printed stats
+│   ├── run_detection.py        #   run the detector over N frames → annotated jpgs (headless)
 │   ├── run_frame.py            #   run the full pipeline on one frame → save visualizations
 │   └── run_sequence.py         #   run over a sequence → annotated RGB | BEV video
 │
 ├── tests/                      # pytest unit tests (grow alongside the modules)
+│   ├── conftest.py             #   fixtures + skips so the suite runs without the downloads
 │   ├── test_frame.py
+│   ├── test_types.py
 │   ├── test_datasets.py
+│   ├── test_detection.py
 │   └── test_geometry.py
 │
 └── eval/                       # evaluation harnesses (added with the later stages)
@@ -193,7 +197,7 @@ to `pipeline.py`, `viz.py`, and `config.py`.
 
 | Stage | Primary file(s) | Also touches | Verify with |
 |-------|-----------------|--------------|-------------|
-| **0 — Data foundation** | `frame.py`, `datasets/base.py`, `datasets/sunrgbd.py`, `depth.py` (sensor passthrough) | `config.py` (data paths), `scripts/download_sunrgbd.py`, `viz.py` | `scripts/smoke_test_stage0.py`, `tests/test_frame.py`, `tests/test_datasets.py` |
+| **0 — Data foundation** | `frame.py`, `types.py`, `datasets/base.py`, `datasets/sunrgbd.py`, `datasets/kitti.py`, `depth.py` | `config.py` (data paths), `scripts/download_datasets.py`, `viz.py` | `scripts/view_frame.py`, `tests/test_frame.py`, `tests/test_types.py`, `tests/test_datasets.py` |
 | **1 — Detection** | `detection.py` | `config.py` (class maps), `viz.py` (draw boxes) | run YOLO on a loaded frame; count/label boxes |
 | **2 — Back-projection** | `geometry.py` | `pipeline.py`, `viz.py` (point-cloud view) | `tests/test_geometry.py` — round-trip a known pixel↔3D point |
 | **3 — Ground removal** | `ground.py` | `pipeline.py`, `viz.py` (color inliers) | visualize: floor points removed, obstacles kept |
@@ -251,7 +255,7 @@ Everything goes under `data/` (gitignored). Get datasets in the order you need t
 **SUN RGB-D (first — indoor, real sensor depth).** Skip the official Princeton release: its label
 extraction requires MATLAB (the #1 pain point in VoteNet issues). Use the pre-extracted HuggingFace mirror
 [`youdaoyzbx/processed_sunrgbd`](https://huggingface.co/datasets/youdaoyzbx/processed_sunrgbd)
-(mmdetection3d layout). `scripts/download_sunrgbd.py` will fetch it into `data/sunrgbd/`. **Spot-check a few
+(mmdetection3d layout). `scripts/download_datasets.py` will fetch it into `data/sunrgbd/`. **Spot-check a few
 frames** against the raw data — confirm the depth-unit convention and intrinsics before trusting the loader
 (see [`stage0.md`](stage0.md) §Pitfalls).
 
@@ -308,8 +312,12 @@ training run costs an experiment, not the project. Pick at most one, and only if
 Each stage ships with a way to see it work — never call a stage done without one.
 
 ```bash
-# Stage 0 — load a frame and eyeball it
-python scripts/smoke_test_stage0.py --dataset sunrgbd --index 0
+# Stage 0 — load a frame and eyeball it (--save writes a jpg instead, for SSH)
+python scripts/view_frame.py --index 0
+python scripts/view_frame.py --index 0 --save out/frames
+
+# Stage 1 — detector over several frames → annotated jpgs
+python scripts/diagnose_stage1.py --indices 0 100 1000 3000
 
 # Full pipeline on one frame → saves annotated RGB + BEV image
 python scripts/run_frame.py --dataset sunrgbd --index 0 --out out/frame0/
@@ -317,8 +325,9 @@ python scripts/run_frame.py --dataset sunrgbd --index 0 --out out/frame0/
 # Full pipeline over a sequence → annotated RGB | BEV video
 python scripts/run_sequence.py --dataset sunrgbd --range 0:200 --out out/seq.mp4
 
-# Unit tests
+# Unit tests — full suite, then the fast subset that needs no dataset or checkpoint
 pytest
+pytest -m "not needs_data"
 ```
 
 The golden rule from the course spec and from good practice: **every stage has a concrete feedback loop.**
