@@ -48,3 +48,13 @@ DETECTOR_MODEL = str(MODELS_DIR / "yolo11x.pt")   # swap stem to yolo11m/s/n for
 DEPTH_MODEL_OUTDOOR = "depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf"   # VKITTI, 80 m
 DEPTH_MODEL_INDOOR = "depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf"     # Hypersim, 20 m
 DEPTH_MAX_M = {"outdoor": 80.0, "indoor": 20.0}
+
+# Stage 3 -- RANSAC ground-plane fit (ground.py). Distances are meters.
+GROUND_DIST_THRESH = 0.04       # inlier band around the plane
+GROUND_MAX_TILT_DEG = 30.0      # reject planes whose normal isn't ~vertical (Y axis)
+GROUND_RANSAC_ITERS = 1000      # max iterations (adapts down once a good fit is found)
+GROUND_RANSAC_SEED = 0          # seed the sampling so report numbers reproduce
+
+# Stage 4 -- Euclidean clustering (cluster.py). Distances are meters.
+CLUSTER_EPS = 0.3               # neighbour radius linking points into one obstacle
+CLUSTER_MIN_POINTS = 30         # clusters smaller than this are dropped as noise
